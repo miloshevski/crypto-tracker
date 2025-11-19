@@ -1,0 +1,17 @@
+# API and HTTP requests
+requests
+
+# Supabase client
+supabase
+
+# CCXT - Crypto Exchange Trading Library
+ccxt
+
+# Environment variables
+python-dotenv
+
+# Progress bar (optional but nice for UX)
+tqdm
+
+# Date/time handling
+python-dateutil

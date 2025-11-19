@@ -1,0 +1,86 @@
+The goal of the homework assignments is to implement a fully functional web application,
+using different software architecture styles and applying the concepts covered in the lectures.
+The application should focus on analyzing the Crypto Exchanges and include historical data
+from international crypto exchanges (such as Binance, Coinbase, Kraken, and others) for the
+top 1000 active cryptocurrencies. The data to be processed should cover at least the last
+10 years on a daily basis.
+In this first homework, you will focus on data processing using the Pipe and Filter architecture.
+Specifically, you will need to automate the process of downloading and transforming data
+from a crypto exchange, ensuring that only the necessary information is kept (for example:
+price, volume, market capitalization and change, liquidation, etc.) and that the data is properly
+formatted for further analysis.
+The following tasks will be required:
+1. Form your team (max 3 members).
+2. Write a short description of the entire project that you will develop during the semester
+(about one page long). State what your application will be about, which technologies you
+will use, where you will get the data from, which data you will process, how you will process
+and store the data and what are the expected results and benefits of your project.
+• Your task is to research and find a suitable source and method for collecting the data,
+implement code for data collection and also understand where you extracted the data
+from (centralized exchanges, decentralized exchanges, directly from protocol/blockchain)
+and what kind of data it is (in what format).
+• Research exchanges and sources for collecting data (publicly available and free APIs,
+web scraping, blockchain reading, etc.), list the options you will explore, and explain
+which option you have chosen and why.
+3. Provide a specification of functional and non-functional requirements for the entire
+project that you will develop during the semester (homeworks). State which requirements
+are functional and which are non-functional. Include user scenarios, personas, and
+descriptive narratives to illustrate these requirements. The document should be 5-10
+pages long.
+4. Download the data you’ll use and populate your database1 with it. To do this, you should use
+the pipe-and-filter dataflow architecture. You’ll need to define multiple simple, independent
+functions (filters) to transform the data and combine them in such a way that the output
+of each filter can be used as the input of another (the filters should be connected in a pipe).
+The goal of these filters and the entire pipe should be to transform the data from the raw
+format you downloaded them in to a format appropriate for input into a database.
+The necessary transformations should include the following steps:
+(a) Filter 1: Automatically download the symbol list of the top 1000 active
+cryptocurrencies
+• Choose data source(s) and automatically extract the list of the top 1000
+active symbols.
+1
+If you aren’t confident in your database skills, you can also use a structured file (CSV, Excel, JSON) or another
+non-relational approach to store the data.
+1
+Software Design and Architecture
+• Exclude invalid cryptocurrencies: delisted, low liquidity, duplicates between
+exchanges, or pairs with unstable quote currencies, without manual intervention.
+(b) Filter 2: Check the last date of available data
+• For each symbol retrieved in the first filter, check your database to see up to
+which date the data for that cryptocurrency has already been collected.
+• If there is no data, download at least the last 10 years (or the maximum allowed
+by the currency) of daily OHLCV data (Open, High, Low, Close, Volume), Last
+Price (24H), 24H Volume, 24H High, 24H Low, liquidity, and other information.
+• If data exists, identify the last saved date and pass this information to the next
+filter.
+(c) Filter 3: Fill in the missing data
+• For each cryptocurrency, use the symbol and the last available date (from
+the second filter) to download all missing data up to the current date.
+• Ensure that all new data is properly added or combined with the existing data in
+the database.
+• Make sure all information is properly formatted in a consistent format.
+At the end of this process, the application should store the complete and updated data for
+the crypto exchange you choose in the database, combining them with the previous data
+and ensuring that all formatting is correct.
+You can create multiple pipes if you’re using more than one data source. If you’re using
+multiple pipes, you should use the same filters for the same transformation in both pipes
+instead of creating new ones.
+5. Maximum Points Challenge
+• Implement a timer to measure how long it takes for your application to fully populate
+an empty database with the exchange data. Optimize this process for maximum speed
+and efficiency.
+• Your team’s score will be scaled relative to the fastest time achieved. The bestperforming solution will set the benchmark, with other scores normalized against it.
+Faster and more efficient solutions will receive the highest scores.
+You can freely choose the programming language, framework, and database you will use. Python
+is recommended for the following homework assignments because of the availability of libraries
+suitable for data transformation and financial calculations.
+Homework points are earned through live presentation, and the code is submitted
+through a public repository on GitLab FINKI https://gitlab.finki.ukim.mk/. Projects
+that are not presented, submitted via email, or attached as .zip files on GitLab FINKI
+will not be accepted and graded.
+Your public repository on GitLab FINKI should contain the documents with the project
+description and requirements specification, the code for data transformation and loading, and the
+initial data you are using. If you choose to use a file for storage, also upload the final processed
+data. All files should be located in a folder named Homework 1.
+The deadline for submitting the first homework is November 23, 2024. Please note that this
+deadline is final and will not be extended under any circumstances.
