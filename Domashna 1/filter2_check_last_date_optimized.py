@@ -7,51 +7,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from supabase import create_client, Client
 from tqdm import tqdm
-import ccxt
 import config
 
 # Initialize Supabase client
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-
-# Initialize Binance for symbol mapping
-binance = ccxt.binance({'enableRateLimit': True})
-
-
-def create_binance_mapping(symbols_list: List[Dict]) -> Dict[str, Optional[str]]:
-    """
-    Create mapping from symbol to Binance trading pair
-
-    Args:
-        symbols_list: List of symbol dictionaries with 'symbol' key
-
-    Returns:
-        Dict mapping symbol to Binance pair (e.g., 'BTC' -> 'BTC/USDT') or None
-    """
-    try:
-        # Load Binance markets
-        binance_markets = binance.load_markets()
-
-        # Get all USDT base currencies
-        binance_bases = set()
-        for market, info in binance_markets.items():
-            if info.get('quote') == 'USDT':
-                binance_bases.add(info.get('base'))
-
-        # Create mapping
-        mapping = {}
-        for symbol_data in symbols_list:
-            symbol = symbol_data['symbol']
-            if symbol in binance_bases:
-                mapping[symbol] = f"{symbol}/USDT"
-            else:
-                mapping[symbol] = None
-
-        return mapping
-
-    except Exception as e:
-        print(f"   ⚠️  Warning: Could not create Binance mapping: {e}")
-        # Return empty mapping on error
-        return {s['symbol']: None for s in symbols_list}
 
 
 def get_all_last_sync_dates_batch(symbols: List[str]) -> Dict[str, Optional[str]]:
@@ -130,38 +89,6 @@ def calculate_download_range(symbol: str, last_date_str: Optional[str]) -> Dict:
     }
 
 
-def update_metadata_table(symbol_data: Dict, binance_symbol: Optional[str] = None):
-    """
-    Update or insert cryptocurrency metadata in crypto_metadata table
-
-    Args:
-        symbol_data: Dictionary containing symbol information
-        binance_symbol: Binance trading pair (e.g., 'BTC/USDT') or None
-    """
-    try:
-        # Ensure name is never NULL - use symbol as fallback
-        name = symbol_data.get('name') or symbol_data['symbol']
-
-        metadata = {
-            'symbol': symbol_data['symbol'],
-            'name': name,
-            'rank': symbol_data.get('rank', 0),
-            'coingecko_id': symbol_data.get('coingecko_id', symbol_data.get('id', '')),
-            'binance_symbol': binance_symbol,
-            'is_active': True,
-            'updated_at': datetime.now().isoformat()
-        }
-
-        # Try to upsert (insert or update if exists)
-        response = supabase.table('crypto_metadata').upsert(
-            metadata,
-            on_conflict='symbol'
-        ).execute()
-
-    except Exception as e:
-        print(f"   ⚠️  Warning: Could not update metadata for {symbol_data['symbol']}: {e}")
-
-
 def filter2_check_last_date(symbols_list: List[Dict]) -> List[Dict]:
     """
     Main function for Filter 2 - OPTIMIZED VERSION
@@ -192,12 +119,6 @@ def filter2_check_last_date(symbols_list: List[Dict]) -> List[Dict]:
 
     # Extract all symbols
     all_symbols = [s['symbol'] for s in symbols_list]
-
-    # Create Binance symbol mapping
-    print("\n🔗 Creating Binance symbol mapping...")
-    binance_mapping = create_binance_mapping(symbols_list)
-    binance_count = sum(1 for v in binance_mapping.values() if v is not None)
-    print(f"   ✅ Mapped {binance_count}/{len(symbols_list)} symbols to Binance")
 
     # 🚀 OPTIMIZATION: Get all last dates in ONE batch query!
     last_dates_map = get_all_last_sync_dates_batch(all_symbols)
@@ -235,10 +156,6 @@ def filter2_check_last_date(symbols_list: List[Dict]) -> List[Dict]:
             stats['incremental'] += 1
 
         stats['total_days_to_fetch'] += download_info['days_missing']
-
-        # Update metadata table with Binance mapping
-        binance_symbol = binance_mapping.get(symbol)
-        update_metadata_table(symbol_data, binance_symbol)
 
     # Print summary
     print("\n" + "="*60)

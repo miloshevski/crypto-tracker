@@ -272,6 +272,9 @@ def process_single_symbol(symbol_data: Dict) -> Dict:
             inserted, _ = insert_batch_to_db(batch)
             total_inserted += inserted
 
+            # Small delay to prevent socket errors
+            time.sleep(0.1)
+
         # Update metadata
         update_metadata_sync_status(symbol, end_date, len(records))
 
