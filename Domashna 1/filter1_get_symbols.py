@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from typing import List, Dict
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import config
 
 def fetch_crypto_page(page: int) -> List[Dict]:
@@ -113,30 +114,45 @@ def transform_crypto_data(crypto: Dict) -> Dict:
 def filter1_get_top_symbols() -> List[Dict]:
     """
     Main function for Filter 1
-    Fetches and validates top 1000 cryptocurrencies
+    Fetches and validates top 1000 cryptocurrencies using parallel requests
 
     Returns:
         List of valid cryptocurrency symbols with metadata
     """
     print("\n" + "="*60)
-    print("🔍 FILTER 1: GET TOP 1000 CRYPTO SYMBOLS")
+    print("🔍 FILTER 1: GET TOP 1000 CRYPTO SYMBOLS (THREADED)")
     print("="*60)
 
     all_cryptos = []
     excluded_cryptos = []
 
-    # Fetch multiple pages
-    print(f"\n📥 Fetching {config.FETCH_PAGES} pages ({config.PER_PAGE} cryptos each)...")
+    # Fetch multiple pages using ThreadPoolExecutor for parallel requests
+    print(f"\n📥 Fetching {config.FETCH_PAGES} pages ({config.PER_PAGE} cryptos each) in parallel...")
 
-    for page in range(1, config.FETCH_PAGES + 1):
-        cryptos = fetch_crypto_page(page)
-        all_cryptos.extend(cryptos)
+    # Use ThreadPoolExecutor to fetch pages concurrently
+    with ThreadPoolExecutor(max_workers=config.FETCH_PAGES) as executor:
+        # Submit all page fetch tasks
+        future_to_page = {
+            executor.submit(fetch_crypto_page, page): page
+            for page in range(1, config.FETCH_PAGES + 1)
+        }
 
-        # Respect rate limits
-        if page < config.FETCH_PAGES:
-            time.sleep(config.API_RATE_LIMIT_DELAY)
+        # Collect results as they complete
+        page_results = {}
+        for future in tqdm(as_completed(future_to_page), total=config.FETCH_PAGES, desc="Fetching pages", ncols=80):
+            page = future_to_page[future]
+            try:
+                cryptos = future.result()
+                page_results[page] = cryptos
+            except Exception as e:
+                print(f"\n  ❌ Error fetching page {page}: {e}")
+                page_results[page] = []
 
-    print(f"\n✅ Fetched {len(all_cryptos)} total cryptocurrencies")
+        # Combine results in order
+        for page in sorted(page_results.keys()):
+            all_cryptos.extend(page_results[page])
+
+    print(f"\n✅ Fetched {len(all_cryptos)} total cryptocurrencies in parallel")
 
     # Validate and filter
     print(f"\n🔍 Validating cryptocurrencies...")

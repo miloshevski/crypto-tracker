@@ -9,18 +9,21 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from supabase import create_client, Client
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import config
 
 # Initialize Supabase client
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
-# Initialize Binance exchange via CCXT
-exchange = ccxt.binance({
-    'enableRateLimit': True,
-    'options': {
-        'defaultType': 'spot',
-    }
-})
+# Initialize multiple exchanges via CCXT for better coverage
+exchanges = {
+    'binance': ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'spot'}}),
+    'coinbase': ccxt.coinbase({'enableRateLimit': True}),
+    'kraken': ccxt.kraken({'enableRateLimit': True}),
+}
+
+# Priority order for exchanges (try in this order)
+EXCHANGE_PRIORITY = ['binance', 'coinbase', 'kraken']
 
 
 def get_binance_symbol(symbol: str) -> str:
@@ -36,9 +39,9 @@ def get_binance_symbol(symbol: str) -> str:
     return f"{symbol}/{config.BINANCE_QUOTE_CURRENCY}"
 
 
-def fetch_ohlcv_data(symbol: str, start_date: datetime, end_date: datetime) -> List[List]:
+def fetch_ohlcv_data(symbol: str, start_date: datetime, end_date: datetime) -> tuple[List[List], str]:
     """
-    Fetch OHLCV data from Binance for a given date range
+    Fetch OHLCV data from multiple exchanges (tries Binance, Coinbase, Kraken in order)
 
     Args:
         symbol: Cryptocurrency symbol (e.g., 'BTC')
@@ -46,69 +49,82 @@ def fetch_ohlcv_data(symbol: str, start_date: datetime, end_date: datetime) -> L
         end_date: End date for data
 
     Returns:
-        List of OHLCV candles [[timestamp, open, high, low, close, volume], ...]
+        Tuple of (List of OHLCV candles, exchange_name that succeeded)
     """
-    binance_symbol = get_binance_symbol(symbol)
-    all_candles = []
+    # Convert datetime to milliseconds timestamp
+    since = int(start_date.timestamp() * 1000)
+    end = int(end_date.timestamp() * 1000)
+    limit = 1000
+    timeframe = '1d'  # Daily candles
 
-    try:
-        # Convert datetime to milliseconds timestamp
-        since = int(start_date.timestamp() * 1000)
-        end = int(end_date.timestamp() * 1000)
+    # Try each exchange in priority order
+    for exchange_name in EXCHANGE_PRIORITY:
+        exchange_client = exchanges[exchange_name]
+        all_candles = []
 
-        # Binance allows max 1000 candles per request
-        limit = 1000
-        timeframe = '1d'  # Daily candles
+        try:
+            # Determine symbol format for this exchange
+            if exchange_name == 'binance':
+                trading_symbol = f"{symbol}/USDT"
+            elif exchange_name == 'coinbase':
+                trading_symbol = f"{symbol}/USD"
+            elif exchange_name == 'kraken':
+                trading_symbol = f"{symbol}/USD"
+            else:
+                trading_symbol = f"{symbol}/USDT"
 
-        current_since = since
+            current_since = since
 
-        while current_since < end:
-            try:
-                # Fetch OHLCV data
-                candles = exchange.fetch_ohlcv(
-                    binance_symbol,
-                    timeframe=timeframe,
-                    since=current_since,
-                    limit=limit
-                )
+            while current_since < end:
+                try:
+                    # Fetch OHLCV data
+                    candles = exchange_client.fetch_ohlcv(
+                        trading_symbol,
+                        timeframe=timeframe,
+                        since=current_since,
+                        limit=limit
+                    )
 
-                if not candles:
-                    break
+                    if not candles:
+                        break
 
-                all_candles.extend(candles)
+                    all_candles.extend(candles)
 
-                # Update since to the last candle's timestamp + 1 day
-                current_since = candles[-1][0] + (24 * 60 * 60 * 1000)
+                    # Update since to the last candle's timestamp + 1 day
+                    current_since = candles[-1][0] + (24 * 60 * 60 * 1000)
 
-                # If we got less than limit, we've reached the end
-                if len(candles) < limit:
-                    break
+                    # If we got less than limit, we've reached the end
+                    if len(candles) < limit:
+                        break
 
-                # Small delay to respect rate limits
-                time.sleep(config.BINANCE_RATE_LIMIT_DELAY)
+                    # Small delay to respect rate limits
+                    time.sleep(config.BINANCE_RATE_LIMIT_DELAY)
 
-            except ccxt.RequestTimeout:
-                print(f"    ⏱️  Timeout for {symbol}, retrying...")
-                time.sleep(2)
-                continue
+                except ccxt.RequestTimeout:
+                    time.sleep(2)
+                    continue
 
-            except ccxt.NetworkError as e:
-                print(f"    ⚠️  Network error for {symbol}: {e}")
-                time.sleep(5)
-                continue
+                except ccxt.NetworkError as e:
+                    time.sleep(5)
+                    continue
 
-        return all_candles
+            # If we got data, return it with the exchange name
+            if all_candles:
+                return all_candles, exchange_name
 
-    except ccxt.BadSymbol:
-        print(f"    ❌ Symbol {binance_symbol} not found on Binance")
-        return []
+        except ccxt.BadSymbol:
+            # Symbol not found on this exchange, try next one
+            continue
 
-    except Exception as e:
-        print(f"    ❌ Error fetching {symbol}: {e}")
-        return []
+        except Exception as e:
+            # Other error on this exchange, try next one
+            continue
+
+    # No exchange had the symbol
+    return [], None
 
 
-def transform_ohlcv_to_db_format(symbol: str, symbol_name: str, candles: List[List]) -> List[Dict]:
+def transform_ohlcv_to_db_format(symbol: str, symbol_name: str, candles: List[List], exchange_name: str = 'binance') -> List[Dict]:
     """
     Transform OHLCV candles to database format
 
@@ -127,6 +143,9 @@ def transform_ohlcv_to_db_format(symbol: str, symbol_name: str, candles: List[Li
         timestamp = candle[0]
         date = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d')
 
+        # Determine quote currency based on exchange
+        quote_currency = 'USDT' if exchange_name == 'binance' else 'USD'
+
         record = {
             'symbol': symbol,
             'name': symbol_name,
@@ -136,8 +155,8 @@ def transform_ohlcv_to_db_format(symbol: str, symbol_name: str, candles: List[Li
             'low': float(candle[3]),
             'close': float(candle[4]),
             'volume': float(candle[5]),
-            'exchange': config.DEFAULT_EXCHANGE,
-            'quote_currency': config.BINANCE_QUOTE_CURRENCY,
+            'exchange': exchange_name,
+            'quote_currency': quote_currency,
             'is_active': True,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
@@ -236,15 +255,15 @@ def process_single_symbol(symbol_data: Dict) -> Dict:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
 
-        # Fetch OHLCV data
-        candles = fetch_ohlcv_data(symbol, start_date, end_date)
+        # Fetch OHLCV data from multiple exchanges
+        candles, exchange_used = fetch_ohlcv_data(symbol, start_date, end_date)
 
-        if not candles:
-            result['error'] = "No data available from Binance"
+        if not candles or not exchange_used:
+            result['error'] = "No data available from any exchange (Binance, Coinbase, Kraken)"
             return result
 
         # Transform to database format
-        records = transform_ohlcv_to_db_format(symbol, name, candles)
+        records = transform_ohlcv_to_db_format(symbol, name, candles, exchange_used)
 
         # Insert in batches
         total_inserted = 0
@@ -268,7 +287,7 @@ def process_single_symbol(symbol_data: Dict) -> Dict:
 def filter3_fill_data(symbols_with_dates: List[Dict]) -> Dict:
     """
     Main function for Filter 3
-    Downloads and inserts historical data for all symbols
+    Downloads and inserts historical data for all symbols using parallel processing
 
     Args:
         symbols_with_dates: List of symbols with date range information from Filter 2
@@ -277,7 +296,7 @@ def filter3_fill_data(symbols_with_dates: List[Dict]) -> Dict:
         Dictionary with processing statistics
     """
     print("\n" + "="*60)
-    print("📊 FILTER 3: FILL MISSING DATA")
+    print("📊 FILTER 3: FILL MISSING DATA (THREADED)")
     print("="*60)
 
     stats = {
@@ -293,28 +312,42 @@ def filter3_fill_data(symbols_with_dates: List[Dict]) -> Dict:
     symbols_to_process = [s for s in symbols_with_dates if s['days_missing'] > 0]
     stats['skipped'] = len(symbols_with_dates) - len(symbols_to_process)
 
-    print(f"\n📥 Processing {len(symbols_to_process)} symbols...")
+    print(f"\n📥 Processing {len(symbols_to_process)} symbols with {config.MAX_CONCURRENT_REQUESTS} parallel threads...")
     print(f"⏭️  Skipping {stats['skipped']} up-to-date symbols")
 
-    # Process each symbol with progress bar
-    progress_bar = tqdm(symbols_to_process, desc="Fetching data", ncols=100)
+    # Process symbols in parallel using ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=config.MAX_CONCURRENT_REQUESTS) as executor:
+        # Submit all tasks
+        future_to_symbol = {
+            executor.submit(process_single_symbol, symbol_data): symbol_data
+            for symbol_data in symbols_to_process
+        }
 
-    for symbol_data in progress_bar:
-        symbol = symbol_data['symbol']
-        days = symbol_data['days_missing']
+        # Process results as they complete with progress bar
+        progress_bar = tqdm(total=len(symbols_to_process), desc="Fetching data", ncols=100)
 
-        # Update progress bar description
-        progress_bar.set_description(f"Processing {symbol:8} ({days:4} days)")
+        for future in as_completed(future_to_symbol):
+            symbol_data = future_to_symbol[future]
+            symbol = symbol_data['symbol']
 
-        # Process symbol
-        result = process_single_symbol(symbol_data)
+            try:
+                result = future.result()
 
-        if result['success']:
-            stats['successful'] += 1
-            stats['total_records_inserted'] += result['records_inserted']
-        else:
-            stats['failed'] += 1
-            print(f"\n    ❌ {symbol}: {result['error']}")
+                if result['success']:
+                    stats['successful'] += 1
+                    stats['total_records_inserted'] += result['records_inserted']
+                    progress_bar.set_description(f"✅ {symbol:8} ({result['records_inserted']} records)")
+                else:
+                    stats['failed'] += 1
+                    progress_bar.set_description(f"❌ {symbol:8} - {result['error']}")
+
+            except Exception as e:
+                stats['failed'] += 1
+                progress_bar.set_description(f"❌ {symbol:8} - Exception: {str(e)}")
+
+            progress_bar.update(1)
+
+        progress_bar.close()
 
     stats['end_time'] = datetime.now()
     stats['duration_seconds'] = (stats['end_time'] - stats['start_time']).total_seconds()

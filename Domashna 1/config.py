@@ -27,9 +27,9 @@ YEARS_OF_HISTORY = 10  # Fetch 10 years of historical data
 DAYS_OF_HISTORY = YEARS_OF_HISTORY * 365  # ~3650 days
 
 # Performance Settings
-MAX_CONCURRENT_REQUESTS = 10  # Number of parallel API requests
+MAX_CONCURRENT_REQUESTS = 20  # Number of parallel API requests (increased for threading)
 API_RATE_LIMIT_DELAY = 1.2  # Delay between API calls (seconds) - CoinGecko free tier: ~50 calls/min
-BINANCE_RATE_LIMIT_DELAY = 0.1  # Binance is more generous
+BINANCE_RATE_LIMIT_DELAY = 0.05  # Binance is more generous (reduced for threading)
 
 # Data Validation Settings
 MIN_VOLUME_24H = 1000  # Minimum 24h volume to consider crypto as active (USD)
