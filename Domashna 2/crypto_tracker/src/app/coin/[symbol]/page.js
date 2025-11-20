@@ -58,7 +58,7 @@ export default function CoinPage({ params }) {
           <YAxis
             stroke="#9CA3AF"
             tick={{ fill: '#9CA3AF' }}
-            domain={['dataMin - 100', 'dataMax + 100']}
+            domain={yAxisDomain}
           />
           <Tooltip
             contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
@@ -70,10 +70,10 @@ export default function CoinPage({ params }) {
           <Legend wrapperStyle={{ color: '#9CA3AF' }} />
           <Area type="monotone" dataKey="high" fill="#10B981" fillOpacity={0.1} stroke="none" />
           <Area type="monotone" dataKey="low" fill="#EF4444" fillOpacity={0.1} stroke="none" />
-          <Line type="monotone" dataKey="open" stroke="#F59E0B" strokeWidth={2} dot={false} name="Open" />
-          <Line type="monotone" dataKey="high" stroke="#10B981" strokeWidth={2} dot={false} name="High" />
-          <Line type="monotone" dataKey="low" stroke="#EF4444" strokeWidth={2} dot={false} name="Low" />
-          <Line type="monotone" dataKey="close" stroke="#60A5FA" strokeWidth={3} dot={false} name="Close" />
+          <Line type="monotone" dataKey="open" stroke="#F59E0B" strokeWidth={1} dot={false} name="Open" />
+          <Line type="monotone" dataKey="high" stroke="#10B981" strokeWidth={1} dot={false} name="High" />
+          <Line type="monotone" dataKey="low" stroke="#EF4444" strokeWidth={1} dot={false} name="Low" />
+          <Line type="monotone" dataKey="close" stroke="#60A5FA" strokeWidth={1.5} dot={false} name="Close" />
         </ComposedChart>
       </ResponsiveContainer>
     );
@@ -91,6 +91,26 @@ export default function CoinPage({ params }) {
   }
 
   const latestData = data.length > 0 ? data[data.length - 1] : null;
+
+  // Calculate dynamic Y-axis domain based on price range
+  const calculateYAxisDomain = () => {
+    if (data.length === 0) return ['auto', 'auto'];
+
+    const prices = data.flatMap(d => [d.open, d.high, d.low, d.close].filter(p => p != null));
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min;
+
+    // Add 5% padding on each side for better visualization
+    const padding = range * 0.05;
+
+    return [
+      (min - padding).toFixed(8),
+      (max + padding).toFixed(8)
+    ];
+  };
+
+  const yAxisDomain = calculateYAxisDomain();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -211,7 +231,7 @@ export default function CoinPage({ params }) {
                     <YAxis
                       stroke="#9CA3AF"
                       tick={{ fill: '#9CA3AF' }}
-                      domain={['dataMin - 100', 'dataMax + 100']}
+                      domain={yAxisDomain}
                     />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
@@ -247,7 +267,7 @@ export default function CoinPage({ params }) {
                     <YAxis
                       stroke="#9CA3AF"
                       tick={{ fill: '#9CA3AF' }}
-                      domain={['dataMin - 100', 'dataMax + 100']}
+                      domain={yAxisDomain}
                     />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
