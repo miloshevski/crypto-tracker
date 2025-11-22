@@ -1,2 +1,4 @@
 *.txt
 .claude
+.env
+*.md
