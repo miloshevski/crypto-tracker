@@ -18,8 +18,8 @@ COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
 BINANCE_BASE_URL = "https://api.binance.com/api/v3"
 
 # Data Collection Settings
-TOP_CRYPTOS_COUNT = 1000  # Target number of valid cryptocurrencies
-FETCH_PAGES = 5  # Fetch 5 pages (250 each = 1250 total) to ensure 1000 valid after filtering
+TOP_CRYPTOS_COUNT = 1000  # Fetch top 1000 by market cap, store valid ones (≤ 1000)
+FETCH_PAGES = 4  # Fetch exactly 4 pages (250 each = 1000 total)
 PER_PAGE = 250  # CoinGecko allows max 250 per page
 
 # Historical Data Settings

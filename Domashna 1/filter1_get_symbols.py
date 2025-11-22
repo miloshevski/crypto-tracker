@@ -114,10 +114,12 @@ def transform_crypto_data(crypto: Dict) -> Dict:
 def filter1_get_top_symbols() -> List[Dict]:
     """
     Main function for Filter 1
-    Fetches and validates top 1000 cryptocurrencies using parallel requests
+    Fetches top 1000 cryptocurrencies by market cap and filters for validity
+
+    Strategy: Fetch exactly top 1000 coins, then keep only valid ones (≤ 1000)
 
     Returns:
-        List of valid cryptocurrency symbols with metadata
+        List of valid cryptocurrency symbols with metadata (≤ 1000)
     """
     print("\n" + "="*60)
     print("🔍 FILTER 1: GET TOP 1000 CRYPTO SYMBOLS (THREADED)")
@@ -126,8 +128,8 @@ def filter1_get_top_symbols() -> List[Dict]:
     all_cryptos = []
     excluded_cryptos = []
 
-    # Fetch multiple pages using ThreadPoolExecutor for parallel requests
-    print(f"\n📥 Fetching {config.FETCH_PAGES} pages ({config.PER_PAGE} cryptos each) in parallel...")
+    # Fetch exactly top 1000 cryptos using ThreadPoolExecutor for parallel requests
+    print(f"\n📥 Fetching top {config.TOP_CRYPTOS_COUNT} cryptos ({config.FETCH_PAGES} pages × {config.PER_PAGE} each) in parallel...")
 
     # Use ThreadPoolExecutor to fetch pages concurrently
     with ThreadPoolExecutor(max_workers=config.FETCH_PAGES) as executor:
@@ -154,8 +156,8 @@ def filter1_get_top_symbols() -> List[Dict]:
 
     print(f"\n✅ Fetched {len(all_cryptos)} total cryptocurrencies in parallel")
 
-    # Validate and filter
-    print(f"\n🔍 Validating cryptocurrencies...")
+    # Validate and filter - keep only valid ones from top 1000
+    print(f"\n🔍 Validating cryptocurrencies (keeping valid ones only)...")
     valid_cryptos = []
 
     for crypto in tqdm(all_cryptos, desc="Validating", ncols=80):
@@ -183,16 +185,17 @@ def filter1_get_top_symbols() -> List[Dict]:
     # Sort by rank
     valid_cryptos.sort(key=lambda x: x['rank'])
 
-    # Limit to top 1000
-    valid_cryptos = valid_cryptos[:config.TOP_CRYPTOS_COUNT]
+    # No hard limit - we keep all valid cryptos from the top 1000 fetched
+    # Result will be ≤ 1000 depending on how many pass validation
 
     # Print summary
     print("\n" + "="*60)
     print("📊 FILTER 1 SUMMARY")
     print("="*60)
-    print(f"✅ Valid cryptocurrencies: {len(valid_cryptos)}")
-    print(f"❌ Excluded cryptocurrencies: {len(excluded_cryptos)}")
-    print(f"📈 Top 5 by market cap:")
+    print(f"📥 Fetched: Top {len(all_cryptos)} cryptocurrencies by market cap")
+    print(f"✅ Valid (after filtering): {len(valid_cryptos)}")
+    print(f"❌ Excluded: {len(excluded_cryptos)}")
+    print(f"📈 Top 5 valid cryptos by market cap:")
     for i, crypto in enumerate(valid_cryptos[:5], 1):
         print(f"   {i}. {crypto['symbol']:8} - {crypto['name']:20} - ${crypto['market_cap']:,.0f}")
 
