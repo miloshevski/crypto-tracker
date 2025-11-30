@@ -120,7 +120,7 @@ export default function Home() {
               </div>
 
               <div className="mb-4 text-sm text-gray-500">
-                Click button below to view historical OHLCV chart
+                Click below to view historical OHLCV chart
               </div>
 
               <Link
