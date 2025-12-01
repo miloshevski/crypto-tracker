@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -30,14 +31,28 @@ export default function LoginPage() {
       return;
     }
 
-    // Simulate login (frontend only)
-    setTimeout(() => {
-      console.log('Login attempt:', { email, password, rememberMe });
-      // In a real app, you would call your authentication API here
+    try {
+      // Sign in with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Login successful
+      console.log('Login successful:', data);
       setLoading(false);
-      alert('Login successful! (Frontend only - no backend connected)');
       router.push('/');
-    }, 1000);
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      setLoading(false);
+      console.error('Login error:', err);
+    }
   };
 
   return (

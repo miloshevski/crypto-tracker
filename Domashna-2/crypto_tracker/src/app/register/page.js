@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -59,14 +60,41 @@ export default function RegisterPage() {
       return;
     }
 
-    // Simulate registration (frontend only)
-    setTimeout(() => {
-      console.log('Registration attempt:', { ...formData, acceptTerms });
-      // In a real app, you would call your registration API here
+    try {
+      // Sign up with Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.name,
+          }
+        }
+      });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Registration successful
+      console.log('Registration successful:', data);
       setLoading(false);
-      alert('Registration successful! (Frontend only - no backend connected)');
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        alert('Registration successful! Please check your email to confirm your account.');
+      } else {
+        alert('Registration successful! You can now log in.');
+      }
+
       router.push('/login');
-    }, 1000);
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      setLoading(false);
+      console.error('Registration error:', err);
+    }
   };
 
   const getPasswordStrength = () => {
