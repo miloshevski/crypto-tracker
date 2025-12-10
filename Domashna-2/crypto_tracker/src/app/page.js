@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFavorites } from '@/hooks/useFavorites';
 
 export default function Home() {
   const [coins, setCoins] = useState([]);
@@ -12,7 +13,6 @@ export default function Home() {
   const [sortBy, setSortBy] = useState('rank');
   const [sortOrder, setSortOrder] = useState('asc');
   const [selectedCoins, setSelectedCoins] = useState([]);
-  const [favorites, setFavorites] = useState([]);
   const [expandedRow, setExpandedRow] = useState(null);
   const [filters, setFilters] = useState({
     exchange: 'all',
@@ -22,12 +22,24 @@ export default function Home() {
   });
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
     if (!error) {
       router.push('/login');
     }
+  };
+
+  const handleFavoriteClick = async (coin) => {
+    if (!user) {
+      const shouldLogin = window.confirm('You need to be logged in to add favorites. Would you like to login now?');
+      if (shouldLogin) {
+        router.push('/login');
+      }
+      return;
+    }
+    await toggleFavorite(coin);
   };
 
   useEffect(() => {
@@ -149,17 +161,6 @@ export default function Home() {
     router.push(`/compare?coins=${symbols}`);
   };
 
-  const toggleFavorite = (coin) => {
-    setFavorites(prev => {
-      const isFavorite = prev.some(c => c.symbol === coin.symbol);
-      if (isFavorite) {
-        return prev.filter(c => c.symbol !== coin.symbol);
-      } else {
-        return [...prev, coin];
-      }
-    });
-  };
-
   const toggleRowExpansion = (coinSymbol) => {
     setExpandedRow(prev => prev === coinSymbol ? null : coinSymbol);
   };
@@ -230,10 +231,10 @@ export default function Home() {
                 Portfolio
               </Link>
               <Link
-                href="#"
+                href={user ? "/profile" : "/login"}
                 className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-md font-medium transition-all"
               >
-                Favorites
+                {user ? "Profile" : "Favorites"}
               </Link>
             </nav>
 
@@ -511,7 +512,7 @@ export default function Home() {
               <tbody className="divide-y divide-slate-700/50">
                 {filteredCoins.map((coin, index) => {
                   const isSelected = selectedCoins.some(c => c.symbol === coin.symbol);
-                  const isFavorite = favorites.some(c => c.symbol === coin.symbol);
+                  const isFav = isFavorite(coin.symbol);
                   const isExpanded = expandedRow === coin.symbol;
                   const trendData = getTrendData(coin.symbol);
                   const exchanges = getExchanges(coin);
@@ -527,10 +528,11 @@ export default function Home() {
                       >
                       <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => toggleFavorite(coin)}
+                          onClick={() => handleFavoriteClick(coin)}
                           className="group transition-all hover:scale-110"
+                          title={!user ? "Login to add favorites" : (isFav ? "Remove from favorites" : "Add to favorites")}
                         >
-                          {isFavorite ? (
+                          {isFav ? (
                             <svg className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 24 24">
                               <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                             </svg>
@@ -822,19 +824,21 @@ export default function Home() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleFavorite(coin);
+                                  handleFavoriteClick(coin);
                                 }}
                                 className={`block w-full px-4 py-3 rounded-lg font-semibold text-center transition-all ${
-                                  isFavorite
+                                  !user
+                                    ? 'bg-slate-700 hover:bg-slate-600 text-white'
+                                    : isFav
                                     ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
                                     : 'bg-slate-700 hover:bg-slate-600 text-white'
                                 }`}
                               >
                                 <div className="flex items-center justify-center gap-2">
-                                  <svg className="w-5 h-5" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                                   </svg>
-                                  {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+                                  {!user ? 'Login to Add Favorites' : (isFav ? 'Remove from Favorites' : 'Add to Favorites')}
                                 </div>
                               </button>
 
@@ -848,8 +852,8 @@ export default function Home() {
                                   </div>
                                   <div className="flex justify-between">
                                     <span>Favorited:</span>
-                                    <span className={isFavorite ? 'text-yellow-400 font-semibold' : 'text-slate-400'}>
-                                      {isFavorite ? 'Yes' : 'No'}
+                                    <span className={isFav ? 'text-yellow-400 font-semibold' : 'text-slate-400'}>
+                                      {isFav ? 'Yes' : 'No'}
                                     </span>
                                   </div>
                                 </div>
