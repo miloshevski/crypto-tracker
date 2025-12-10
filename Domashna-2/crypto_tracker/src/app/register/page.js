@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -14,7 +15,9 @@ export default function RegisterPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
+  const { signUp, signInWithGoogle, signInWithGithub } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -26,6 +29,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
     setLoading(true);
 
     // Validation
@@ -59,14 +63,36 @@ export default function RegisterPage() {
       return;
     }
 
-    // Simulate registration (frontend only)
-    setTimeout(() => {
-      console.log('Registration attempt:', { ...formData, acceptTerms });
-      // In a real app, you would call your registration API here
-      setLoading(false);
-      alert('Registration successful! (Frontend only - no backend connected)');
-      router.push('/login');
-    }, 1000);
+    // Sign up with Supabase
+    const { data, error: signUpError } = await signUp(formData.email, formData.password, formData.name);
+
+    setLoading(false);
+
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+
+    if (data?.user) {
+      setSuccess(true);
+      setTimeout(() => {
+        router.push('/');
+      }, 2000);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    const { error: googleError } = await signInWithGoogle();
+    if (googleError) {
+      setError(googleError.message);
+    }
+  };
+
+  const handleGithubSignUp = async () => {
+    const { error: githubError } = await signInWithGithub();
+    if (githubError) {
+      setError(githubError.message);
+    }
   };
 
   const getPasswordStrength = () => {
@@ -108,6 +134,13 @@ export default function RegisterPage() {
             {error && (
               <div className="bg-red-900/30 border border-red-500 text-red-400 px-4 py-3 rounded-lg">
                 {error}
+              </div>
+            )}
+
+            {/* Success Message */}
+            {success && (
+              <div className="bg-green-900/30 border border-green-500 text-green-400 px-4 py-3 rounded-lg">
+                Registration successful! Redirecting to home page...
               </div>
             )}
 
@@ -263,6 +296,7 @@ export default function RegisterPage() {
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
+              onClick={handleGoogleSignUp}
               className="px-4 py-3 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -272,6 +306,7 @@ export default function RegisterPage() {
             </button>
             <button
               type="button"
+              onClick={handleGithubSignUp}
               className="px-4 py-3 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

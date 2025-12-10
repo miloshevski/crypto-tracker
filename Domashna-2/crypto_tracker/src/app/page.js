@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
   const [coins, setCoins] = useState([]);
@@ -20,6 +21,14 @@ export default function Home() {
     trend: 'all',
   });
   const router = useRouter();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (!error) {
+      router.push('/login');
+    }
+  };
 
   useEffect(() => {
     fetchCoins();
@@ -199,12 +208,21 @@ export default function Home() {
               >
                 Markets
               </Link>
-              <Link
-                href="/compare"
+              <button
+                onClick={() => {
+                  if (selectedCoins.length === 0) {
+                    alert('No coins are selected for comparison. Please select at least 2 coins from the list below.');
+                  } else if (selectedCoins.length < 2) {
+                    alert('Please select at least 2 coins to compare. Currently selected: ' + selectedCoins.length);
+                  } else {
+                    const symbols = selectedCoins.map(c => c.symbol).join(',');
+                    router.push(`/compare?coins=${symbols}`);
+                  }
+                }}
                 className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-md font-medium transition-all"
               >
                 Compare
-              </Link>
+              </button>
               <Link
                 href="#"
                 className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-md font-medium transition-all"
@@ -221,18 +239,40 @@ export default function Home() {
 
             {/* Auth Buttons */}
             <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="px-5 py-2 text-slate-300 hover:text-white font-medium transition-all"
-              >
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 rounded-lg font-semibold transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40"
-              >
-                Get Started
-              </Link>
+              {user ? (
+                <>
+                  <div className="flex items-center gap-3 px-4 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                      {user.email?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                    <div className="text-sm">
+                      <div className="text-white font-medium">{user.user_metadata?.full_name || 'User'}</div>
+                      <div className="text-slate-400 text-xs">{user.email}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-all"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="px-5 py-2 text-slate-300 hover:text-white font-medium transition-all"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/register"
+                    className="px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 rounded-lg font-semibold transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 

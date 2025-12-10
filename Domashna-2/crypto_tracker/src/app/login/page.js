@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { signIn, signInWithGoogle, signInWithGithub } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,14 +32,33 @@ export default function LoginPage() {
       return;
     }
 
-    // Simulate login (frontend only)
-    setTimeout(() => {
-      console.log('Login attempt:', { email, password, rememberMe });
-      // In a real app, you would call your authentication API here
-      setLoading(false);
-      alert('Login successful! (Frontend only - no backend connected)');
+    // Sign in with Supabase
+    const { data, error: signInError } = await signIn(email, password);
+
+    setLoading(false);
+
+    if (signInError) {
+      setError(signInError.message);
+      return;
+    }
+
+    if (data?.user) {
       router.push('/');
-    }, 1000);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const { error: googleError } = await signInWithGoogle();
+    if (googleError) {
+      setError(googleError.message);
+    }
+  };
+
+  const handleGithubSignIn = async () => {
+    const { error: githubError } = await signInWithGithub();
+    if (githubError) {
+      setError(githubError.message);
+    }
   };
 
   return (
@@ -145,6 +166,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
+              onClick={handleGoogleSignIn}
               className="px-4 py-3 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -154,6 +176,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
+              onClick={handleGithubSignIn}
               className="px-4 py-3 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
