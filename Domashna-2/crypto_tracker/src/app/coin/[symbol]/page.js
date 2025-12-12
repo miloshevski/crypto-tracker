@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { LineChart, Line, CandlestickChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area } from 'recharts';
 import OverallSignal from '@/components/TechnicalAnalysis/OverallSignal';
 import IndicatorsSection from '@/components/TechnicalAnalysis/IndicatorsSection';
+import MetricsDisplay from '@/components/LSTM/MetricsDisplay';
+import PredictionChart from '@/components/LSTM/PredictionChart';
+import ConfigurationPanel from '@/components/LSTM/ConfigurationPanel';
+import TrainingInfo from '@/components/LSTM/TrainingInfo';
 
 export default function CoinPage({ params }) {
   const { symbol } = use(params);
@@ -19,6 +23,16 @@ export default function CoinPage({ params }) {
   const [taLoading, setTaLoading] = useState(false);
   const [taData, setTaData] = useState(null);
   const [taError, setTaError] = useState(null);
+
+  // LSTM Prediction state
+  const [lstmLoading, setLstmLoading] = useState(false);
+  const [lstmData, setLstmData] = useState(null);
+  const [lstmError, setLstmError] = useState(null);
+  const [lstmConfig, setLstmConfig] = useState({
+    lookback: 30,
+    epochs: 50,
+    days_ahead: 7
+  });
 
   useEffect(() => {
     fetchData();
@@ -60,7 +74,10 @@ export default function CoinPage({ params }) {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.statusText}`);
+        // Try to get detailed error message from API
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.detail || response.statusText;
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -79,6 +96,50 @@ export default function CoinPage({ params }) {
       fetchTechnicalAnalysis();
     }
   }, [activeTab, taTimeframe, data]);
+
+  // Fetch LSTM Prediction
+  const fetchLSTMPrediction = async () => {
+    if (!data || data.length < 100) {
+      setLstmError('Insufficient data. Need at least 100 data points for LSTM prediction.');
+      return;
+    }
+
+    setLstmLoading(true);
+    setLstmError(null);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/lstm-prediction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: data,
+          lookback: lstmConfig.lookback,
+          epochs: lstmConfig.epochs,
+          days_ahead: lstmConfig.days_ahead
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.detail || response.statusText;
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      setLstmData(result);
+    } catch (error) {
+      console.error('Error fetching LSTM prediction:', error);
+      setLstmError(error.message || 'Failed to generate LSTM prediction');
+    } finally {
+      setLstmLoading(false);
+    }
+  };
+
+  const handleLstmConfigChange = (key, value) => {
+    setLstmConfig(prev => ({ ...prev, [key]: value }));
+  };
 
   const intervals = [
     { value: 'week', label: 'Last Week' },
@@ -214,6 +275,17 @@ export default function CoinPage({ params }) {
           >
             <span className="mr-2">📈</span>
             Technical Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab('lstm-prediction')}
+            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === 'lstm-prediction'
+                ? 'bg-gray-700 text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <span className="mr-2">🧠</span>
+            LSTM Prediction
           </button>
         </div>
 
@@ -543,6 +615,108 @@ export default function CoinPage({ params }) {
                   Comprehensive market analysis using 10 technical indicators across multiple timeframes.
                   Select a timeframe above to begin analyzing {symbol.toUpperCase()}.
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* LSTM Prediction Tab */}
+        {activeTab === 'lstm-prediction' && (
+          <div className="space-y-6">
+            {/* Configuration Panel */}
+            <ConfigurationPanel
+              config={lstmConfig}
+              onChange={handleLstmConfigChange}
+              onPredict={fetchLSTMPrediction}
+              loading={lstmLoading}
+            />
+
+            {/* Loading State */}
+            {lstmLoading && (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-gray-700 border-t-purple-500 rounded-full animate-spin mx-auto"></div>
+                  </div>
+                  <p className="text-gray-400 mt-6 text-sm">Training LSTM model and generating predictions...</p>
+                  <p className="text-gray-500 mt-2 text-xs">This may take 30-60 seconds</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error State */}
+            {lstmError && (
+              <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <span className="text-red-400 text-xl">⚠</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-red-400 font-semibold mb-1">Prediction Error</h3>
+                    <p className="text-gray-400 text-sm mb-3">{lstmError}</p>
+                    <button
+                      onClick={fetchLSTMPrediction}
+                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-medium border border-red-500/30 transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* LSTM Results */}
+            {!lstmLoading && !lstmError && lstmData && (
+              <>
+                {/* Disclaimer */}
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-amber-400 text-lg">!</span>
+                    </div>
+                    <div>
+                      <h4 className="text-amber-400 font-semibold text-sm mb-1">Educational Purpose Only</h4>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        LSTM predictions are experimental and for educational purposes only.
+                        Machine learning models cannot predict future prices with certainty.
+                        This is not financial advice. Do your own research and consult professionals before investing.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics Display */}
+                <MetricsDisplay metrics={lstmData.metrics} />
+
+                {/* Prediction Chart */}
+                <PredictionChart
+                  historicalData={data}
+                  predictions={lstmData.predictions}
+                />
+
+                {/* Training Info */}
+                <TrainingInfo training={lstmData.training} />
+              </>
+            )}
+
+            {/* Initial State - No Data Yet */}
+            {!lstmLoading && !lstmError && !lstmData && (
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-16 text-center">
+                <div className="w-20 h-20 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-5xl">🧠</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">LSTM Price Prediction</h3>
+                <p className="text-gray-400 text-sm max-w-md mx-auto mb-4">
+                  Advanced neural network model to predict future {symbol.toUpperCase()} prices based on historical patterns.
+                  Configure the model parameters above and click "Generate Predictions" to begin.
+                </p>
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <span>Lookback: {lstmConfig.lookback} days</span>
+                  <span>•</span>
+                  <span>Epochs: {lstmConfig.epochs}</span>
+                  <span>•</span>
+                  <span>Forecast: {lstmConfig.days_ahead} days</span>
+                </div>
               </div>
             )}
           </div>
