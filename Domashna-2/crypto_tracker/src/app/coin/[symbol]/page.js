@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { LineChart, Line, CandlestickChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area } from 'recharts';
+import OverallSignal from '@/components/TechnicalAnalysis/OverallSignal';
+import IndicatorsSection from '@/components/TechnicalAnalysis/IndicatorsSection';
 
 export default function CoinPage({ params }) {
   const { symbol } = use(params);
@@ -10,6 +12,13 @@ export default function CoinPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [interval, setInterval] = useState('max');
   const [chartType, setChartType] = useState('line');
+
+  // Technical Analysis state
+  const [activeTab, setActiveTab] = useState('charts');
+  const [taTimeframe, setTaTimeframe] = useState('1w');
+  const [taLoading, setTaLoading] = useState(false);
+  const [taData, setTaData] = useState(null);
+  const [taError, setTaError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -27,6 +36,49 @@ export default function CoinPage({ params }) {
       setLoading(false);
     }
   };
+
+  // Fetch Technical Analysis
+  const fetchTechnicalAnalysis = async () => {
+    if (!data || data.length === 0) {
+      setTaError('No data available for technical analysis');
+      return;
+    }
+
+    setTaLoading(true);
+    setTaError(null);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/technical-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: data,
+          timeframe: taTimeframe
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      setTaData(result);
+    } catch (error) {
+      console.error('Error fetching technical analysis:', error);
+      setTaError(error.message || 'Failed to fetch technical analysis');
+    } finally {
+      setTaLoading(false);
+    }
+  };
+
+  // Fetch TA when tab is activated or timeframe changes
+  useEffect(() => {
+    if (activeTab === 'technical-analysis' && data.length > 0) {
+      fetchTechnicalAnalysis();
+    }
+  }, [activeTab, taTimeframe, data]);
 
   const intervals = [
     { value: 'week', label: 'Last Week' },
@@ -138,9 +190,37 @@ export default function CoinPage({ params }) {
         </div>
       </header>
 
-      {/* Controls */}
+      {/* Tab Navigation */}
       <div className="container mx-auto px-4 py-6">
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-gray-800/50 rounded-xl p-1.5 inline-flex gap-1 mb-6">
+          <button
+            onClick={() => setActiveTab('charts')}
+            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === 'charts'
+                ? 'bg-gray-700 text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <span className="mr-2">📊</span>
+            Price Charts
+          </button>
+          <button
+            onClick={() => setActiveTab('technical-analysis')}
+            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === 'technical-analysis'
+                ? 'bg-gray-700 text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <span className="mr-2">📈</span>
+            Technical Analysis
+          </button>
+        </div>
+
+        {/* Price Charts Tab */}
+        {activeTab === 'charts' && (
+          <>
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Interval Selection */}
             <div>
@@ -318,6 +398,155 @@ export default function CoinPage({ params }) {
             )}
           </div>
         </div>
+        </>
+        )}
+
+        {/* Technical Analysis Tab */}
+        {activeTab === 'technical-analysis' && (
+          <div>
+            {/* Timeframe Selection */}
+            <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-5 mb-6">
+              <label className="block text-gray-400 text-sm mb-3 font-medium">Timeframe</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTaTimeframe('1d')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    taTimeframe === '1d'
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-gray-700/30 text-gray-400 hover:bg-gray-700/50 border border-transparent'
+                  }`}
+                >
+                  1 Day
+                </button>
+                <button
+                  onClick={() => setTaTimeframe('1w')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    taTimeframe === '1w'
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-gray-700/30 text-gray-400 hover:bg-gray-700/50 border border-transparent'
+                  }`}
+                >
+                  1 Week
+                </button>
+                <button
+                  onClick={() => setTaTimeframe('1m')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    taTimeframe === '1m'
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-gray-700/30 text-gray-400 hover:bg-gray-700/50 border border-transparent'
+                  }`}
+                >
+                  1 Month
+                </button>
+              </div>
+            </div>
+
+            {/* Loading State */}
+            {taLoading && (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+                  </div>
+                  <p className="text-gray-400 mt-6 text-sm">Analyzing market indicators...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error State */}
+            {taError && (
+              <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <span className="text-red-400 text-xl">⚠</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-red-400 font-semibold mb-1">Analysis Error</h3>
+                    <p className="text-gray-400 text-sm mb-3">{taError}</p>
+                    <button
+                      onClick={fetchTechnicalAnalysis}
+                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-medium border border-red-500/30 transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Technical Analysis Results */}
+            {!taLoading && !taError && taData && (
+              <>
+                {/* Overall Signal */}
+                <OverallSignal
+                  signal={taData.overall.signal}
+                  score={taData.overall.score}
+                  buyCount={taData.overall.buyCount}
+                  sellCount={taData.overall.sellCount}
+                  holdCount={taData.overall.holdCount}
+                  totalIndicators={taData.overall.totalIndicators}
+                />
+
+                {/* Disclaimer */}
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5 mb-8">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-amber-400 text-lg">!</span>
+                    </div>
+                    <div>
+                      <h4 className="text-amber-400 font-semibold text-sm mb-1">Educational Purpose Only</h4>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        This technical analysis is provided for educational and informational purposes.
+                        It should not be considered as financial or investment advice.
+                        Always conduct your own research and consult with qualified financial advisors before making investment decisions.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Oscillators */}
+                <IndicatorsSection
+                  title="Oscillators"
+                  indicators={taData.oscillators}
+                  icon="🔄"
+                />
+
+                {/* Moving Averages */}
+                <IndicatorsSection
+                  title="Moving Averages"
+                  indicators={taData.movingAverages}
+                  icon="📊"
+                />
+
+                {/* Analysis Info */}
+                <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4 mt-6">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Data Points Analyzed</span>
+                    <span className="text-white font-medium">{taData.dataPoints}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm mt-2">
+                    <span className="text-gray-400">Timeframe</span>
+                    <span className="text-white font-medium">{taTimeframe === '1d' ? '1 Day' : taTimeframe === '1w' ? '1 Week' : '1 Month'}</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Initial State - No Data Yet */}
+            {!taLoading && !taError && !taData && (
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-16 text-center">
+                <div className="w-20 h-20 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-5xl">📈</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Technical Analysis</h3>
+                <p className="text-gray-400 text-sm max-w-md mx-auto">
+                  Comprehensive market analysis using 10 technical indicators across multiple timeframes.
+                  Select a timeframe above to begin analyzing {symbol.toUpperCase()}.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
