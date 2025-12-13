@@ -13,7 +13,7 @@ def prepare_dataframe(data: List[OHLCVData]) -> pd.DataFrame:
 def filter_by_timeframe(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     """Filter data based on timeframe"""
     timeframe_points = {
-        '1d': 30,
+        '1d': 60,  # Increased from 30 to 60 for better indicator calculation (need 50+ for SMA 50)
         '1w': 90,
         '1m': 365
     }
