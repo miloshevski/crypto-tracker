@@ -9,6 +9,8 @@ import MetricsDisplay from '@/components/LSTM/MetricsDisplay';
 import PredictionChart from '@/components/LSTM/PredictionChart';
 import ConfigurationPanel from '@/components/LSTM/ConfigurationPanel';
 import TrainingInfo from '@/components/LSTM/TrainingInfo';
+import SentimentOverallSignal from '@/components/SentimentAnalysis/SentimentOverallSignal';
+import SentimentMetricsSection from '@/components/SentimentAnalysis/SentimentMetricsSection';
 
 export default function CoinPage({ params }) {
   const { symbol } = use(params);
@@ -33,6 +35,11 @@ export default function CoinPage({ params }) {
     epochs: 50,
     days_ahead: 7
   });
+
+  // Sentiment Analysis state
+  const [sentimentLoading, setSentimentLoading] = useState(false);
+  const [sentimentData, setSentimentData] = useState(null);
+  const [sentimentError, setSentimentError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -140,6 +147,46 @@ export default function CoinPage({ params }) {
   const handleLstmConfigChange = (key, value) => {
     setLstmConfig(prev => ({ ...prev, [key]: value }));
   };
+
+  // Fetch Sentiment Analysis
+  const fetchSentimentAnalysis = async () => {
+    setSentimentLoading(true);
+    setSentimentError(null);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/sentiment-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          symbol: symbol.toLowerCase(),
+          sources: ['twitter', 'reddit', 'news']
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.detail || response.statusText;
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      setSentimentData(result);
+    } catch (error) {
+      console.error('Error fetching sentiment analysis:', error);
+      setSentimentError(error.message || 'Failed to fetch sentiment analysis');
+    } finally {
+      setSentimentLoading(false);
+    }
+  };
+
+  // Fetch sentiment when tab is activated
+  useEffect(() => {
+    if (activeTab === 'sentiment-analysis') {
+      fetchSentimentAnalysis();
+    }
+  }, [activeTab, symbol]);
 
   const intervals = [
     { value: 'week', label: 'Last Week' },
@@ -286,6 +333,17 @@ export default function CoinPage({ params }) {
           >
             <span className="mr-2">🧠</span>
             LSTM Prediction
+          </button>
+          <button
+            onClick={() => setActiveTab('sentiment-analysis')}
+            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === 'sentiment-analysis'
+                ? 'bg-gray-700 text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <span className="mr-2">💭</span>
+            Sentiment Analysis
           </button>
         </div>
 
@@ -717,6 +775,85 @@ export default function CoinPage({ params }) {
                   <span>•</span>
                   <span>Forecast: {lstmConfig.days_ahead} days</span>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sentiment Analysis Tab */}
+        {activeTab === 'sentiment-analysis' && (
+          <div className="bg-gray-800 rounded-lg p-6">
+            {/* Loading State */}
+            {sentimentLoading && (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-2xl">💭</span>
+                  </div>
+                </div>
+                <p className="text-gray-400 mt-6 font-medium">Analyzing market sentiment...</p>
+                <p className="text-gray-500 mt-2 text-xs">Checking social media, news, and community discussions</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {sentimentError && (
+              <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <span className="text-red-400 text-xl">⚠</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-red-400 font-semibold mb-1">Sentiment Analysis Error</h3>
+                    <p className="text-gray-400 text-sm mb-3">{sentimentError}</p>
+                    <button
+                      onClick={fetchSentimentAnalysis}
+                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-medium border border-red-500/30 transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sentiment Results */}
+            {!sentimentLoading && !sentimentError && sentimentData && (
+              <div className="space-y-6">
+                {/* Overall Signal */}
+                <SentimentOverallSignal
+                  overall={sentimentData.overall}
+                  symbol={symbol.toUpperCase()}
+                />
+
+                {/* Metrics Section */}
+                <SentimentMetricsSection metrics={sentimentData.metrics} />
+
+                {/* Last Updated */}
+                <div className="text-center text-xs text-gray-500 pt-4 border-t border-gray-700/50">
+                  Last updated: {new Date(sentimentData.lastUpdated).toLocaleString()}
+                </div>
+              </div>
+            )}
+
+            {/* Initial State - No Data Yet */}
+            {!sentimentLoading && !sentimentError && !sentimentData && (
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-16 text-center">
+                <div className="w-20 h-20 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-5xl">💭</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Sentiment Analysis</h3>
+                <p className="text-gray-400 text-sm max-w-md mx-auto mb-6">
+                  Analyze market sentiment for {symbol.toUpperCase()} from social media, news, and community discussions.
+                  Get insights into public opinion and market mood.
+                </p>
+                <button
+                  onClick={fetchSentimentAnalysis}
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Analyze Sentiment
+                </button>
               </div>
             )}
           </div>
