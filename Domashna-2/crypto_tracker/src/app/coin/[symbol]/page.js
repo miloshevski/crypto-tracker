@@ -749,6 +749,7 @@ export default function CoinPage({ params }) {
                 {/* Prediction Chart */}
                 <PredictionChart
                   historicalData={data}
+                  validationPredictions={lstmData.validation_predictions}
                   predictions={lstmData.predictions}
                 />
 
